@@ -25,20 +25,27 @@ static void teardown_sdl() {
     SDL_Quit();
 }
 
-static bool process_events() {
+static int process_events() {
+    bool do_reset = false;
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
-        if (event.type == SDL_QUIT) return false;
+        if (event.type == SDL_QUIT) return 0;
         if (event.type == SDL_KEYDOWN) {
             switch(event.key.keysym.sym) {
               case SDLK_ESCAPE:
-                return false;
+                return 0;
+              case SDLK_SPACE:
+                do_reset = true;
+                break;
               default:
                 break;
             }
         }
     }
-    return true;
+    if (do_reset) {
+        return -1;
+    }
+    return 1;
 }
 
 static void display(int* cell, SDL_Surface* screen) {
@@ -83,31 +90,61 @@ static void update(int** front, int** back, int rule[9]) {
     *back = h;
 }
 
+static void reset(int* front, int* back, int** rule) {
+    for (int x = 0; x < CFG_WIDTH; x++) {
+        for (int y = 0; y < CFG_HEIGHT; y++) {
+            front[x + y * CFG_WIDTH] = 0;
+            back[x + y * CFG_WIDTH] = 0;
+        }
+    }
+    srand(0);
+    int s = 20;
+    for (int x = CFG_WIDTH / 2 - s; x < CFG_WIDTH / 2 + s; x++) {
+        for (int y = CFG_HEIGHT / 2 - s; y < CFG_HEIGHT / 2 + s; y++) {
+            front[x + y * CFG_WIDTH] = rand() % 2; //(x + y) % 2;
+        }
+    }
+    static int rule_seed = -1;
+    if (rule_seed == -1) {
+        (*rule)[0] = 0;
+        (*rule)[1] = 0;
+        (*rule)[2] = -1;
+        (*rule)[3] = 1;
+        (*rule)[4] = 0;
+        (*rule)[5] = 0;
+        (*rule)[6] = 0;
+        (*rule)[7] = 0;
+        (*rule)[8] = 0;
+    } else {
+        srand(rule_seed);
+        for (int i = 0; i < 9; i++) {
+            (*rule)[i] = (rand() % 3) - 1;
+        }
+    }
+    rule_seed++;
+}
+
 int main(int argc, char** argv) {
     SDL_Surface* screen;
     if (!init_sdl(&screen)) return EXIT_FAILURE;
     //int cell[CFG_WIDTH][CFG_HEIGHT]; // TODO typedef that?
     int* cell_front = malloc(CFG_WIDTH * CFG_HEIGHT * sizeof(int));
     int* cell_back = malloc(CFG_WIDTH * CFG_HEIGHT * sizeof(int));
-    srand(0);
-    int s = 2;
-    for (int x = CFG_WIDTH / 2 - s; x < CFG_WIDTH / 2 + s; x++) {
-        for (int y = CFG_HEIGHT / 2 - s; y < CFG_HEIGHT / 2 + s; y++) {
-            cell_front[x + y * CFG_WIDTH] = rand() % 2; //(x + y) % 2;
+    int* rule = malloc(9 * sizeof(int));
+    // = {0, 0, -1, 1, 0, 0, 0, 0, 0};
+    reset(cell_front, cell_back, &rule);
+    int running = 1;
+    while ((running = process_events())) {
+        if (running == -1) {
+            reset(cell_front, cell_back, &rule);
         }
-    }
-    srand(3);
-    int rule[9]; // = {0, 0, -1, 1, 0, 0, 0, 0, 0};
-    for (int i = 0; i < 9; i++) {
-        rule[i] = (rand() % 3) - 1;
-    }
-    while (process_events()) {
         display(cell_front, screen);
         update(&cell_front, &cell_back, rule);
         //usleep(8000);
     }
     free(cell_front);
     free(cell_back);
+    free(rule);
     teardown_sdl();
     return EXIT_SUCCESS;
 }
