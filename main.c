@@ -43,7 +43,7 @@ static bool process_events() {
     return true;
 }
 
-static void display(int cell[CFG_WIDTH][CFG_HEIGHT], SDL_Surface* screen) {
+static void display(int* cell, SDL_Surface* screen) {
     Uint32 black = SDL_MapRGB(screen->format, 0, 0, 0);
     Uint32 white = SDL_MapRGB(screen->format, 255, 255, 255);
     if (SDL_MUSTLOCK(screen)) {
@@ -52,45 +52,58 @@ static void display(int cell[CFG_WIDTH][CFG_HEIGHT], SDL_Surface* screen) {
     for (int x = 0; x < CFG_WIDTH; x++) {
         for (int y = 0; y < CFG_HEIGHT; y++) {
             Uint32* pixPos = (Uint32 *)screen->pixels + y*screen->pitch/4 + x;
-            *pixPos = cell[x][y]? black : white;
+            *pixPos = cell[x + y * CFG_WIDTH]? white : black;
         }
     }
     if (SDL_MUSTLOCK(screen)) SDL_UnlockSurface(screen);
     SDL_Flip(screen);
 }
 
-static void update(int cell[CFG_WIDTH][CFG_HEIGHT]) {
+static void update(int** front, int** back) {
     for (int x = 1; x < CFG_WIDTH - 1; x++) {
         for (int y = 1; y < CFG_HEIGHT - 1; y++) {
             int sum = 0;
             for (int i = -1; i < 2; i++) {
                 for (int j = -1; j < 2; j++) {
-                    sum += cell[x + i][y + j];
+                    //if ((i == 0) ^ (j == 0)) {
+                        sum += (*front)[x + i + (y + j) * CFG_WIDTH];
+                    //}
                 }
             }
-            if ((sum < 2) || (sum > 4)) {
-                cell[x][y] = 0;
-            } else if (sum == 4) {
-                cell[x][y] = 1;
+            sum -= (*front)[x + y * CFG_WIDTH];
+            if ((sum < 2) || (sum > 3)) {
+                (*back)[x + y * CFG_WIDTH] = 0;
+            } else if (sum == 3) {
+                (*back)[x + y * CFG_WIDTH] = 1;
+            } else {
+                (*back)[x + y * CFG_WIDTH] = (*front)[x + y * CFG_WIDTH];
             }
         }
     }
+    int* h = *front;
+    *front = *back;
+    *back = h;
 }
 
 int main(int argc, char** argv) {
     if (!init_sdl()) return EXIT_FAILURE;
-    int cell[CFG_WIDTH][CFG_HEIGHT]; // TODO typedef that?
-    srand(0);
-    for (int x = 0; x < CFG_WIDTH; x++) {
-        for (int y = 0; y < CFG_HEIGHT; y++) {
-            cell[x][y] = rand() % 2; //(x + y) % 2;
+    //int cell[CFG_WIDTH][CFG_HEIGHT]; // TODO typedef that?
+    int* cell_front = malloc(CFG_WIDTH * CFG_HEIGHT * sizeof(int));
+    int* cell_back = malloc(CFG_WIDTH * CFG_HEIGHT * sizeof(int));
+    srand(1);
+    int s = 230;
+    for (int x = CFG_WIDTH / 2 - s; x < CFG_WIDTH / 2 + s; x++) {
+        for (int y = CFG_HEIGHT / 2 - s; y < CFG_HEIGHT / 2 + s; y++) {
+            cell_front[x + y * CFG_WIDTH] = rand() % 2; //(x + y) % 2;
         }
     }
     while (process_events()) {
-        display(cell, screen);
-        update(cell);
-        usleep(80000);
+        display(cell_front, screen);
+        update(&cell_front, &cell_back);
+        //usleep(8000);
     }
+    free(cell_front);
+    free(cell_back);
     teardown_sdl();
     return EXIT_SUCCESS;
 }
