@@ -6,15 +6,13 @@
 const int CFG_WIDTH = 512;
 const int CFG_HEIGHT = 512;
 
-SDL_Surface* screen;
-
-static bool init_sdl() {
+static bool init_sdl(SDL_Surface** screen) {
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         fprintf(stderr, "Unable to init SDL: %s\n", SDL_GetError());
         return false;
     }
-    screen = SDL_SetVideoMode(CFG_WIDTH, CFG_HEIGHT, 32, SDL_HWSURFACE);
-    if (!screen) {
+    *screen = SDL_SetVideoMode(CFG_WIDTH, CFG_HEIGHT, 32, SDL_HWSURFACE);
+    if (!*screen) {
         fprintf(stderr, "Unable set SDL video mode: %s\n", SDL_GetError());
         SDL_Quit();
         return false;
@@ -59,7 +57,7 @@ static void display(int* cell, SDL_Surface* screen) {
     SDL_Flip(screen);
 }
 
-static void update(int** front, int** back) {
+static void update(int** front, int** back, int rule[9]) {
     for (int x = 1; x < CFG_WIDTH - 1; x++) {
         for (int y = 1; y < CFG_HEIGHT - 1; y++) {
             int sum = 0;
@@ -71,12 +69,12 @@ static void update(int** front, int** back) {
                 }
             }
             sum -= (*front)[x + y * CFG_WIDTH];
-            if ((sum < 2) || (sum > 3)) {
-                (*back)[x + y * CFG_WIDTH] = 0;
-            } else if (sum == 3) {
-                (*back)[x + y * CFG_WIDTH] = 1;
-            } else {
+            switch (rule[sum]) {
+              case -1:
                 (*back)[x + y * CFG_WIDTH] = (*front)[x + y * CFG_WIDTH];
+                break;
+              default:
+                (*back)[x + y * CFG_WIDTH] = rule[sum];
             }
         }
     }
@@ -86,20 +84,26 @@ static void update(int** front, int** back) {
 }
 
 int main(int argc, char** argv) {
-    if (!init_sdl()) return EXIT_FAILURE;
+    SDL_Surface* screen;
+    if (!init_sdl(&screen)) return EXIT_FAILURE;
     //int cell[CFG_WIDTH][CFG_HEIGHT]; // TODO typedef that?
     int* cell_front = malloc(CFG_WIDTH * CFG_HEIGHT * sizeof(int));
     int* cell_back = malloc(CFG_WIDTH * CFG_HEIGHT * sizeof(int));
-    srand(1);
-    int s = 230;
+    srand(0);
+    int s = 2;
     for (int x = CFG_WIDTH / 2 - s; x < CFG_WIDTH / 2 + s; x++) {
         for (int y = CFG_HEIGHT / 2 - s; y < CFG_HEIGHT / 2 + s; y++) {
             cell_front[x + y * CFG_WIDTH] = rand() % 2; //(x + y) % 2;
         }
     }
+    srand(3);
+    int rule[9]; // = {0, 0, -1, 1, 0, 0, 0, 0, 0};
+    for (int i = 0; i < 9; i++) {
+        rule[i] = (rand() % 3) - 1;
+    }
     while (process_events()) {
         display(cell_front, screen);
-        update(&cell_front, &cell_back);
+        update(&cell_front, &cell_back, rule);
         //usleep(8000);
     }
     free(cell_front);
