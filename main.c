@@ -66,7 +66,7 @@ static void display(int* cell, SDL_Surface* screen) {
     for (int x = 0; x < CFG_WIDTH; x++) {
         for (int y = 0; y < CFG_HEIGHT; y++) {
             Uint32* pixPos = (Uint32 *)screen->pixels + y*screen->pitch/4 + x;
-            *pixPos = colour[cell[x + y * CFG_WIDTH]];
+            *pixPos = colour[cell[x + 1 + (y + 1) * (CFG_WIDTH + 2)]];
         }
     }
     if (SDL_MUSTLOCK(screen)) SDL_UnlockSurface(screen);
@@ -74,24 +74,32 @@ static void display(int* cell, SDL_Surface* screen) {
 }
 
 static void update(int** front, int** back, int rule[9]) {
-    for (int x = 1; x < CFG_WIDTH - 1; x++) {
-        for (int y = 1; y < CFG_HEIGHT - 1; y++) {
+    for (int x = 1; x <= CFG_WIDTH; x++) {
+        for (int y = 1; y <= CFG_HEIGHT; y++) {
             int sum = 0;
             for (int i = -1; i < 2; i++) {
                 for (int j = -1; j < 2; j++) {
                     //if ((i == 0) ^ (j == 0)) {
-                        sum += (*front)[x + i + (y + j) * CFG_WIDTH];
+                        sum += (*front)[x + i + (y + j) * (CFG_WIDTH + 2)];
                     //}
                 }
             }
-            sum -= (*front)[x + y * CFG_WIDTH];
+            sum -= (*front)[x + y * (CFG_WIDTH + 2)];
             if (rule[sum] >= 0) {
-                (*back)[x + y * CFG_WIDTH] = rule[sum];
+                (*back)[x + y * (CFG_WIDTH + 2)] = rule[sum];
             } else {
-                (*back)[x + y * CFG_WIDTH] = ((*front)[x + y * CFG_WIDTH]
+                (*back)[x + y * (CFG_WIDTH + 2)] = ((*front)[x + y * (CFG_WIDTH + 2)]
                   - rule[sum] - 1) % CFG_STATE_COUNT;
             }
         }
+    }
+    for (int x = 1; x <= CFG_WIDTH; x++) {
+        (*back)[x] = (*back)[x + CFG_HEIGHT * (CFG_WIDTH + 2)];
+        (*back)[x + (CFG_HEIGHT + 1) * (CFG_WIDTH + 2)] = (*back)[x + CFG_WIDTH + 2];
+    }
+    for (int y = 0; y < CFG_HEIGHT + 2; y++) {
+        (*back)[y * (CFG_WIDTH + 2)] = (*back)[CFG_WIDTH + y * (CFG_WIDTH + 2)];
+        (*back)[CFG_WIDTH + 1 + y * (CFG_WIDTH + 2)] = (*back)[1 + y * (CFG_WIDTH + 2)];
     }
     int* h = *front;
     *front = *back;
@@ -99,10 +107,10 @@ static void update(int** front, int** back, int rule[9]) {
 }
 
 static void reset(int* front, int* back, int** rule) {
-    for (int x = 0; x < CFG_WIDTH; x++) {
-        for (int y = 0; y < CFG_HEIGHT; y++) {
-            front[x + y * CFG_WIDTH] = 0;
-            back[x + y * CFG_WIDTH] = 0;
+    for (int x = 0; x < CFG_WIDTH + 2; x++) {
+        for (int y = 0; y < CFG_HEIGHT + 2; y++) {
+            front[x + y * (CFG_WIDTH + 2)] = 0;
+            back[x + y * (CFG_WIDTH + 2)] = 0;
         }
     }
     static int rule_seed = -1;
@@ -114,7 +122,7 @@ static void reset(int* front, int* back, int** rule) {
     int s = 30;
     for (int x = CFG_WIDTH / 2 - s; x < CFG_WIDTH / 2 + s; x++) {
         for (int y = CFG_HEIGHT / 2 - s; y < CFG_HEIGHT / 2 + s; y++) {
-            front[x + y * CFG_WIDTH] = rand() % states_used; //(x + y) % states_used;
+            front[x + 1 + (y + 1) * (CFG_WIDTH + 2)] = rand() % states_used; //(x + y) % states_used;
         }
     }
     if (rule_seed == -1) {
@@ -150,8 +158,8 @@ int main(int argc, char** argv) {
     SDL_Surface* screen;
     if (!init_sdl(&screen)) return EXIT_FAILURE;
     //int cell[CFG_WIDTH][CFG_HEIGHT]; // TODO typedef that?
-    int* cell_front = malloc(CFG_WIDTH * CFG_HEIGHT * sizeof(int));
-    int* cell_back = malloc(CFG_WIDTH * CFG_HEIGHT * sizeof(int));
+    int* cell_front = malloc((CFG_WIDTH + 2) * (CFG_HEIGHT + 2) * sizeof(int));
+    int* cell_back = malloc((CFG_WIDTH + 2) * (CFG_HEIGHT + 2) * sizeof(int));
     int* rule = malloc(9 * (CFG_STATE_COUNT - 1) * sizeof(int));
     reset(cell_front, cell_back, &rule);
     int running = 1;
