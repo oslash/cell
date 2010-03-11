@@ -3,8 +3,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-const int CFG_WIDTH = 512;
-const int CFG_HEIGHT = 512;
+const int CFG_WIDTH = 400;
+const int CFG_HEIGHT = 400;
+const int CFG_STATE_COUNT = 8;
 
 static bool init_sdl(SDL_Surface** screen) {
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -49,15 +50,23 @@ static int process_events() {
 }
 
 static void display(int* cell, SDL_Surface* screen) {
-    Uint32 black = SDL_MapRGB(screen->format, 0, 0, 0);
-    Uint32 white = SDL_MapRGB(screen->format, 255, 255, 255);
+    Uint32 colour[] = {
+      SDL_MapRGB(screen->format, 0, 0, 0),
+      SDL_MapRGB(screen->format, 255, 255, 255),
+      SDL_MapRGB(screen->format, 255, 0, 0),
+      SDL_MapRGB(screen->format, 0, 255, 0),
+      SDL_MapRGB(screen->format, 0, 0, 255),
+      SDL_MapRGB(screen->format, 255, 255, 0),
+      SDL_MapRGB(screen->format, 255, 0, 255),
+      SDL_MapRGB(screen->format, 0, 255, 255),
+    };
     if (SDL_MUSTLOCK(screen)) {
         if (SDL_LockSurface(screen) < 0) return;
     }
     for (int x = 0; x < CFG_WIDTH; x++) {
         for (int y = 0; y < CFG_HEIGHT; y++) {
             Uint32* pixPos = (Uint32 *)screen->pixels + y*screen->pitch/4 + x;
-            *pixPos = cell[x + y * CFG_WIDTH]? white : black;
+            *pixPos = colour[cell[x + y * CFG_WIDTH]];
         }
     }
     if (SDL_MUSTLOCK(screen)) SDL_UnlockSurface(screen);
@@ -76,12 +85,11 @@ static void update(int** front, int** back, int rule[9]) {
                 }
             }
             sum -= (*front)[x + y * CFG_WIDTH];
-            switch (rule[sum]) {
-              case -1:
-                (*back)[x + y * CFG_WIDTH] = (*front)[x + y * CFG_WIDTH];
-                break;
-              default:
+            if (rule[sum] >= 0) {
                 (*back)[x + y * CFG_WIDTH] = rule[sum];
+            } else {
+                (*back)[x + y * CFG_WIDTH] = ((*front)[x + y * CFG_WIDTH]
+                  - rule[sum] - 1) % CFG_STATE_COUNT;
             }
         }
     }
@@ -97,31 +105,45 @@ static void reset(int* front, int* back, int** rule) {
             back[x + y * CFG_WIDTH] = 0;
         }
     }
+    static int rule_seed = -1;
+    int states_used = CFG_STATE_COUNT;
+    if (rule_seed == -1) {
+        states_used = 2;
+    }
     srand(0);
-    int s = 20;
+    int s = 30;
     for (int x = CFG_WIDTH / 2 - s; x < CFG_WIDTH / 2 + s; x++) {
         for (int y = CFG_HEIGHT / 2 - s; y < CFG_HEIGHT / 2 + s; y++) {
-            front[x + y * CFG_WIDTH] = rand() % 2; //(x + y) % 2;
+            front[x + y * CFG_WIDTH] = rand() % states_used; //(x + y) % states_used;
         }
     }
-    static int rule_seed = -1;
     if (rule_seed == -1) {
         (*rule)[0] = 0;
         (*rule)[1] = 0;
         (*rule)[2] = -1;
         (*rule)[3] = 1;
-        (*rule)[4] = 0;
-        (*rule)[5] = 0;
-        (*rule)[6] = 0;
-        (*rule)[7] = 0;
-        (*rule)[8] = 0;
+        for (int i = 4; i < 9 * (CFG_STATE_COUNT - 1); i++) {
+            (*rule)[i] = 0;
+        }
     } else {
         srand(rule_seed);
-        for (int i = 0; i < 9; i++) {
-            (*rule)[i] = (rand() % 3) - 1;
+        for (int i = 0; i < 9 * (CFG_STATE_COUNT - 1); i++) {
+            if ((rand() % 10) > 8) {
+                (*rule)[i] = -1;
+            } else if ((rand() % 10) > 3) {
+                (*rule)[i] = 0;
+            } else if (((rand() % 10) > 4) && i > 0) {
+                (*rule)[i] = (*rule)[i - 1];
+            } else {
+                (*rule)[i] = (rand() % (CFG_STATE_COUNT * 2)) - CFG_STATE_COUNT;
+            }
         }
     }
     rule_seed++;
+    for (int i = 0; i < 9 * (CFG_STATE_COUNT - 1); i++) {
+        printf("%i, ", (*rule)[i]);
+    }
+    printf("\n");
 }
 
 int main(int argc, char** argv) {
@@ -130,8 +152,7 @@ int main(int argc, char** argv) {
     //int cell[CFG_WIDTH][CFG_HEIGHT]; // TODO typedef that?
     int* cell_front = malloc(CFG_WIDTH * CFG_HEIGHT * sizeof(int));
     int* cell_back = malloc(CFG_WIDTH * CFG_HEIGHT * sizeof(int));
-    int* rule = malloc(9 * sizeof(int));
-    // = {0, 0, -1, 1, 0, 0, 0, 0, 0};
+    int* rule = malloc(9 * (CFG_STATE_COUNT - 1) * sizeof(int));
     reset(cell_front, cell_back, &rule);
     int running = 1;
     while ((running = process_events())) {
@@ -140,7 +161,7 @@ int main(int argc, char** argv) {
         }
         display(cell_front, screen);
         update(&cell_front, &cell_back, rule);
-        //usleep(8000);
+        //usleep(100000);
     }
     free(cell_front);
     free(cell_back);
