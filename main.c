@@ -50,7 +50,7 @@ static int process_events() {
 }
 
 static void display(int* cell, SDL_Surface* screen) {
-    Uint32 colour[] = {
+    Uint32 colour[8] = {
       SDL_MapRGB(screen->format, 0, 0, 0),
       SDL_MapRGB(screen->format, 255, 255, 255),
       SDL_MapRGB(screen->format, 255, 0, 0),
@@ -66,7 +66,7 @@ static void display(int* cell, SDL_Surface* screen) {
     for (int x = 0; x < CFG_WIDTH; x++) {
         for (int y = 0; y < CFG_HEIGHT; y++) {
             Uint32* pixPos = (Uint32 *)screen->pixels + y*screen->pitch/4 + x;
-            *pixPos = colour[cell[x + 1 + (y + 1) * (CFG_WIDTH + 2)]];
+            *pixPos = colour[cell[x + 1 + (y + 1) * (CFG_WIDTH + 2)] % 8];
         }
     }
     if (SDL_MUSTLOCK(screen)) SDL_UnlockSurface(screen);
@@ -177,3 +177,5 @@ int main(int argc, char** argv) {
     teardown_sdl();
     return EXIT_SUCCESS;
 }
+
+// http://www.argentum.freeserve.co.uk/lex_l.htm#lidka
